@@ -6,13 +6,14 @@
  *  - Keywords
  *  - Constants (numeric/char/string) with table
  *  - Operators & punctuation
- *  - Ignores whitespace and comments (including nested /* */)
+ *  - Ignores whitespace and comments (including nested)
  *  - Reports invalid tokens with line numbers
  *  - Maintains a rudimentary Symbol Table (type inference from declarations)
  *  - Prints token stream + tables at program end
  *
  * Build: flex scanner.l && gcc lex.yy.c -lfl -o scanner
  */
+
 
 %option noyywrap
 %option yylineno
@@ -242,7 +243,6 @@ ESC        (\\[abfnrtv\\'"?]|\\x[0-9A-Fa-f]+|\\[0-7]{1,3})
 
 %%
 
-/* ---------- Preprocessor (line-start # with continuations) ---------- */
 ^[ \t]*\#[^\n\\]*(\\\n[^\n\\]*)*    {
     print_token("PREPROC", yytext);
     /* If it's a #define NAME value, record in constant table */
@@ -271,15 +271,11 @@ ESC        (\\[abfnrtv\\'"?]|\\x[0-9A-Fa-f]+|\\[0-7]{1,3})
     free(tmp);
 }
 
-/* ---------- Whitespace & newlines ---------- */
 {WS}       { /* ignore */ }
 \n         { /* newline handled by %option yylineno */ }
 
-/* ---------- Comments ---------- */
-/* Single-line C++ style */
 "//".*     { /* ignore */ }
 
-/* Multi-line (with nesting) */
 "/*"       { BEGIN(COMMENT); int depth=1; int c1,c2;
              while(depth>0){
                 c1 = input();
@@ -298,7 +294,6 @@ ESC        (\\[abfnrtv\\'"?]|\\x[0-9A-Fa-f]+|\\[0-7]{1,3})
              BEGIN(INITIAL);
            }
 
-/* ---------- Strings & chars ---------- */
 \"         { BEGIN(STRING); yyless(0); }
 <STRING>\"([^"\\\n]|{ESC})*\"   {
              print_token("STRING", yytext);
@@ -318,8 +313,7 @@ ESC        (\\[abfnrtv\\'"?]|\\x[0-9A-Fa-f]+|\\[0-7]{1,3})
 <CHARLIT>\n { fprintf(stderr,"[line %d] ERROR: Unterminated char literal\n", yylineno-1); BEGIN(INITIAL); }
 <CHARLIT>.  { /* consume */ }
 
-/* ---------- Keywords / Types ---------- */
-"auto"|"break"|"case"|"const"|"continue"|"default"|"do"|"else"|"enum"|"extern"|"for"|"goto"|"if"|"register"|"return"|"sizeof"|"static"|"struct"|"switch"|"typedef"|"union"|"volatile"|"while"|"inline"|"restrict"_?|"_Alignas"|"_Alignof"|"_Atomic"|"_Bool"|"_Complex"|"_Generic"|"_Imaginary"|"_Noreturn"|"_Static_assert"|"_Thread_local" {
+"auto"|"break"|"case"|"const"|"continue"|"default"|"do"|"else"|"enum"|"extern"|"for"|"goto"|"if"|"register"|"return"|"sizeof"|"static"|"struct"|"switch"|"typedef"|"union"|"volatile"|"while"|"inline"|"restrict"|"_Alignas"|"_Alignof"|"_Atomic"|"_Bool"|"_Complex"|"_Generic"|"_Imaginary"|"_Noreturn"|"_Static_assert"|"_Thread_local" {
     print_token("KEYWORD", yytext);
     last_was_ident = 0;
 }
@@ -330,13 +324,7 @@ ESC        (\\[abfnrtv\\'"?]|\\x[0-9A-Fa-f]+|\\[0-7]{1,3})
     else add_type_token(yytext);
     last_was_ident = 0;
 }
-"*"  {
-    print_token("OP", yytext);
-    if(in_declaration) add_type_token("*");
-    last_was_ident = 0;
-}
 
-/* ---------- Identifiers ---------- */
 {ID}      {
     print_token("IDENT", yytext);
     Symbol* s = sym_touch(yytext);
@@ -349,7 +337,6 @@ ESC        (\\[abfnrtv\\'"?]|\\x[0-9A-Fa-f]+|\\[0-7]{1,3})
     }
 }
 
-/* ---------- Numbers ---------- */
 {HEX}{INTSUFFIX}?   { print_token("NUMBER", yytext); const_add("-", yylineno, yytext, "hex"); last_was_ident = 0; }
 {BIN}{INTSUFFIX}?   { print_token("NUMBER", yytext); const_add("-", yylineno, yytext, "bin"); last_was_ident = 0; }
 {FLOAT1}{FLOATSUF}? { print_token("NUMBER", yytext); const_add("-", yylineno, yytext, "float"); last_was_ident = 0; }
@@ -359,8 +346,6 @@ ESC        (\\[abfnrtv\\'"?]|\\x[0-9A-Fa-f]+|\\[0-7]{1,3})
 {OCT}{INTSUFFIX}?   { print_token("NUMBER", yytext); const_add("-", yylineno, yytext, "oct"); last_was_ident = 0; }
 {DIGIT}+{INTSUFFIX}? { print_token("NUMBER", yytext); const_add("-", yylineno, yytext, classify_int(yytext)); last_was_ident = 0; }
 
-/* ---------- Punctuation & Operators ---------- */
-/* Parentheses may indicate function declarator or call. We capture args on '(' after an identifier. */
 "("       {
             print_token("PUNCT", yytext);
             if(last_was_ident){
@@ -375,11 +360,10 @@ ESC        (\\[abfnrtv\\'"?]|\\x[0-9A-Fa-f]+|\\[0-7]{1,3})
             }
             last_was_ident = 0;
          }
-< FUNCARGS >[^()\n]+   { /* collect raw text inside args */ for(size_t i=0;i<yyleng;i++) args_push_char(yytext[i]); }
-< FUNCARGS >"("        { args_push_char('('); paren_depth++; }
-< FUNCARGS >")"        { args_push_char(')'); paren_depth--; if(paren_depth==0){ args_end(); BEGIN(INITIAL);} }
-< FUNCARGS >\n         { args_push_char('\n'); }
-< FUNCARGS >.          { args_push_char(yytext[0]); }
+<FUNCARGS>[^()\n]+   { /* collect raw text inside args */ for(size_t i=0;i<yyleng;i++) args_push_char(yytext[i]); }
+<FUNCARGS>"("        { args_push_char('('); paren_depth++; }
+<FUNCARGS>")"        { args_push_char(')'); paren_depth--; if(paren_depth==0){ args_end(); BEGIN(INITIAL);} }
+<FUNCARGS>\n         { args_push_char('\n'); }
 
 ")"       { print_token("PUNCT", yytext); last_was_ident = 0; }
 "["{WS}*{DIGIT}+{WS}*"]"  {
@@ -398,12 +382,18 @@ ESC        (\\[abfnrtv\\'"?]|\\x[0-9A-Fa-f]+|\\[0-7]{1,3})
 "}"       { print_token("PUNCT", yytext); last_was_ident = 0; }
 "."|"->"  { print_token("OP", yytext); last_was_ident = 0; }
 
-"++"|"--"|"+"|"-"|"*"|"/"|"%"|"=="|"!="|"<="|">="|"<"|">"|"="|"+="|"-="|"*="|"/="|"%="|"&="|"|="|"^="|"&&"|"||"|"!"|"~"|"&"|"|"|"^"|"<<"|">>"|"?"|":" {
-    print_token("OP", yytext);
-    last_was_ident = 0;
-}
+"++"|"--"                    { print_token("OP", yytext); last_was_ident = 0; }
+"+="|"-="|"*="|"/="|"%="     { print_token("OP", yytext); last_was_ident = 0; }
+"&="|"^="|"|="               { print_token("OP", yytext); last_was_ident = 0; }
+"=="|"!="|"<="|">="          { print_token("OP", yytext); last_was_ident = 0; }
+"<<"|">>"                    { print_token("OP", yytext); last_was_ident = 0; }
+"&&"|"||"                    { print_token("OP", yytext); last_was_ident = 0; }
+"+"|"-"|"*"|"/"|"%"          { print_token("OP", yytext); last_was_ident = 0; }
+"<"|">"|"="                  { print_token("OP", yytext); last_was_ident = 0; }
+"!"|"~"|"&"|"^"              { print_token("OP", yytext); last_was_ident = 0; }
+"|"                          { print_token("OP", yytext); last_was_ident = 0; }
+"?"|":"                      { print_token("OP", yytext); last_was_ident = 0; }
 
-/* ---------- Anything else: error ---------- */
 .         {
             fprintf(stderr, "[line %d] ERROR: Invalid token '%s'\n", yylineno, yytext);
           }
