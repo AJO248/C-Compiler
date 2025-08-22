@@ -765,72 +765,97 @@ int yy_flex_debug = 0;
 #define YY_RESTORE_YY_MORE_OFFSET
 char *yytext;
 #line 1 "scanner.l"
-/*
- * C Language Scanner using Flex
- * Features:
- *  - Identifiers (variables, functions)
- *  - Preprocessor directives
- *  - Keywords
- *  - Constants (numeric/char/string) with table
- *  - Operators & punctuation
- *  - Ignores whitespace and comments (including nested)
- *  - Reports invalid tokens with line numbers
- *  - Maintains a rudimentary Symbol Table (type inference from declarations)
- *  - Prints token stream + tables at program end
- *
- * Build: flex scanner.l && gcc lex.yy.c -lfl -o scanner
- */
-#line 22 "scanner.l"
+#line 2 "scanner.l"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <ctype.h>
 
 /* ---------------- Utilities ---------------- */
-static char* xstrdup(const char* s){
-    if(!s) return NULL;
-    size_t n=strlen(s)+1; char* p=(char*)malloc(n); if(p) memcpy(p,s,n); return p;
+
+static char* xstrdup(const char* s) {
+    if (!s) {
+        return NULL;
+    }
+    size_t n = strlen(s) + 1;
+    char* p = (char*)malloc(n);
+    if (p) {
+        memcpy(p, s, n);
+    }
+    return p;
 }
-static char* xsubstr(const char* s, size_t a, size_t b){
-    if(!s||b<a) return xstrdup("");
-    size_t n=b-a; char* p=(char*)malloc(n+1); if(!p) return NULL;
-    memcpy(p,s+a,n); p[n]='\0'; return p;
+
+static char* xsubstr(const char* s, size_t a, size_t b) {
+    if (!s || b < a) {
+        return xstrdup("");
+    }
+    size_t n = b - a;
+    char* p = (char*)malloc(n + 1);
+    if (!p) {
+        return NULL;
+    }
+    memcpy(p, s + a, n);
+    p[n] = '\0';
+    return p;
 }
-static char* trim(char* s){
-    if(!s) return s;
-    size_t n=strlen(s);
-    size_t i=0; while(i<n && isspace((unsigned char)s[i])) i++;
-    size_t j=n; while(j>i && isspace((unsigned char)s[j-1])) j--;
-    size_t m=j-i; memmove(s, s+i, m); s[m]='\0'; return s;
+
+static char* trim(char* s) {
+    if (!s) {
+        return s;
+    }
+    size_t n = strlen(s);
+    size_t i = 0;
+    while (i < n && isspace((unsigned char)s[i])) {
+        i++;
+    }
+    size_t j = n;
+    while (j > i && isspace((unsigned char)s[j - 1])) {
+        j--;
+    }
+    size_t m = j - i;
+    memmove(s, s + i, m);
+    s[m] = '\0';
+    return s;
 }
 
 /* ---------------- Symbol Table ---------------- */
+
 typedef struct Symbol {
     char* name;
-    char* type;            /* e.g., int, float, char*, struct X */
-    char* dimensions;      /* e.g., [10][20] */
-    int   frequency;       /* number of appearances */
-    char* return_type;     /* for functions */
-    char* param_lists;     /* concatenated lists observed in function calls or declarations */
-    int   is_function;     /* boolean */
-    struct Symbol* next;   /* chaining in hash bucket */
+    char* type;         
+    char* dimensions;   
+    int   frequency;    
+    char* return_type;  
+    char* param_lists;  
+    int   is_function;  
+    struct Symbol* next;
 } Symbol;
 
 #define SYM_HASH_SIZE 211
 static Symbol* symtab[SYM_HASH_SIZE];
 
-static unsigned long djb2(const char* str){
-    unsigned long hash = 5381; int c;
-    while((c = (unsigned char)*str++)) hash = ((hash << 5) + hash) + c;
+static unsigned long djb2(const char* str) {
+    unsigned long hash = 5381;
+    int c;
+    while ((c = (unsigned char) *str++)) {
+        hash = ((hash << 5) + hash) + c; 
+    }
     return hash;
 }
-static Symbol* sym_lookup(const char* name){
+
+static Symbol* sym_lookup(const char* name) {
     unsigned long h = djb2(name) % SYM_HASH_SIZE;
     Symbol* s = symtab[h];
-    while(s){ if(strcmp(s->name, name)==0) return s; s=s->next; }
+    while (s) {
+        if (strcmp(s->name, name) == 0) {
+            return s;
+        }
+        s = s->next;
+    }
     return NULL;
 }
-static Symbol* sym_insert(const char* name){
+
+static Symbol* sym_insert(const char* name) {
     unsigned long h = djb2(name) % SYM_HASH_SIZE;
     Symbol* s = (Symbol*)calloc(1, sizeof(Symbol));
     s->name = xstrdup(name);
@@ -839,61 +864,75 @@ static Symbol* sym_insert(const char* name){
     symtab[h] = s;
     return s;
 }
-static Symbol* sym_touch(const char* name){
+
+static Symbol* sym_touch(const char* name) {
     Symbol* s = sym_lookup(name);
-    if(!s) s = sym_insert(name);
+    if (!s) {
+        s = sym_insert(name);
+    }
     s->frequency++;
     return s;
 }
-static void sym_set_type(Symbol* s, const char* type){
-    if(!s) return;
-    if(s->type) free(s->type);
+
+static void sym_set_type(Symbol* s, const char* type) {
+    if (!s) return;
+    if (s->type) free(s->type);
     s->type = xstrdup(type);
 }
-static void sym_set_return(Symbol* s, const char* r){
-    if(!s) return;
-    if(s->return_type) free(s->return_type);
+
+static void sym_set_return(Symbol* s, const char* r) {
+    if (!s) return;
+    if (s->return_type) free(s->return_type);
     s->return_type = xstrdup(r);
 }
-static void sym_append_dims(Symbol* s, const char* dims){
-    if(!s || !dims) return;
+
+static void sym_append_dims(Symbol* s, const char* dims) {
+    if (!s || !dims) return;
     size_t old = s->dimensions ? strlen(s->dimensions) : 0;
     size_t add = strlen(dims);
     char* p = (char*)malloc(old + add + 1);
-    if(!p) return;
-    if(old){ memcpy(p, s->dimensions, old); free(s->dimensions); }
-    memcpy(p+old, dims, add);
-    p[old+add]='\0';
+    if (!p) return;
+    if (old) {
+        memcpy(p, s->dimensions, old);
+        free(s->dimensions);
+    }
+    memcpy(p + old, dims, add);
+    p[old + add] = '\0';
     s->dimensions = p;
 }
-static void sym_append_params(Symbol* s, const char* params){
-    if(!s || !params) return;
+
+static void sym_append_params(Symbol* s, const char* params) {
+    if (!s || !params) return;
     const char* sep = s->param_lists ? " ; " : "";
     size_t old = s->param_lists ? strlen(s->param_lists) : 0;
     size_t add = strlen(sep) + strlen(params);
     char* p = (char*)malloc(old + add + 1);
-    if(!p) return;
-    if(old){ memcpy(p, s->param_lists, old); free(s->param_lists); }
-    memcpy(p+old, sep, strlen(sep));
-    memcpy(p+old+strlen(sep), params, strlen(params));
-    p[old+add]='\0';
+    if (!p) return;
+    if (old) {
+        memcpy(p, s->param_lists, old);
+        free(s->param_lists);
+    }
+    memcpy(p + old, sep, strlen(sep));
+    memcpy(p + old + strlen(sep), params, strlen(params));
+    p[old + add] = '\0';
     s->param_lists = p;
 }
 
 /* ---------------- Constant Table ---------------- */
+
 typedef struct Constant {
-    char* var_name;  /* For #define NAME value, else "-" */
+    char* var_name; 
     int   line;
-    char* value;     /* literal text */
-    char* type;      /* "int", "float", "char", "string", "hex", "oct", "bin", "macro" */
+    char* value;
+    char* type; 
 } Constant;
 
 static Constant* consts = NULL;
 static size_t nconsts = 0, capconsts = 0;
 
-static void const_add(const char* var, int line, const char* val, const char* type){
-    if(nconsts == capconsts){
-        capconsts = capconsts ? capconsts*2 : 64;
+static void const_add(const char* var, int line, const char* val, const char* type) {
+    if (nconsts == capconsts) {
+        capconsts = capconsts ? capconsts * 2 : 64;
         consts = (Constant*)realloc(consts, capconsts * sizeof(Constant));
     }
     consts[nconsts].var_name = xstrdup(var ? var : "-");
@@ -903,81 +942,95 @@ static void const_add(const char* var, int line, const char* val, const char* ty
     nconsts++;
 }
 
-/* ---------------- Declaration context tracking ---------------- */
 static int in_declaration = 0;
 static char last_type[256] = {0};
 static char last_ident[256] = {0};
 static int last_was_ident = 0;
 static int array_capture_for_ident = 0;
 
-static void start_declaration(const char* t){
+static void start_declaration(const char* t) {
     in_declaration = 1;
-    last_type[0]='\0';
-    if(t){ strncat(last_type, t, sizeof(last_type)-1); }
-}
-static void add_type_token(const char* t){
-    if(last_type[0]) strncat(last_type, " ", sizeof(last_type)-1);
-    strncat(last_type, t, sizeof(last_type)-1);
-}
-static void end_declaration(){
-    in_declaration = 0;
-    last_type[0]='\0';
+    last_type[0] = '\0';
+    if (t) {
+        strncat(last_type, t, sizeof(last_type) - 1);
+    }
 }
 
-/* Capture function arguments in calls/declarations */
+static void add_type_token(const char* t) {
+    if (last_type[0]) {
+        strncat(last_type, " ", sizeof(last_type) - 1);
+    }
+    strncat(last_type, t, sizeof(last_type) - 1);
+}
+
+static void end_declaration() {
+    in_declaration = 0;
+    last_type[0] = '\0';
+}
+
 static int paren_depth = 0;
 static int capturing_args = 0;
 static char* arg_buffer = NULL;
 static size_t arg_cap = 0, arg_len = 0;
 static Symbol* current_func_sym = NULL;
 
-static void args_begin(Symbol* s){
-    capturing_args = 1; paren_depth = 1; arg_len = 0;
-    if(!arg_buffer){ arg_cap = 256; arg_buffer = (char*)malloc(arg_cap); }
+static void args_begin(Symbol* s) {
+    capturing_args = 1;
+    paren_depth = 1;
+    arg_len = 0;
+    if (!arg_buffer) {
+        arg_cap = 256;
+        arg_buffer = (char*)malloc(arg_cap);
+    }
     current_func_sym = s;
 }
-static void args_push_char(int c){
-    if(!capturing_args) return;
-    if(arg_len + 2 > arg_cap){
+
+static void args_push_char(int c) {
+    if (!capturing_args) return;
+    if (arg_len + 2 > arg_cap) {
         arg_cap *= 2;
         arg_buffer = (char*)realloc(arg_buffer, arg_cap);
     }
     arg_buffer[arg_len++] = (char)c;
     arg_buffer[arg_len] = '\0';
 }
-static void args_end(){
-    if(capturing_args && current_func_sym){
-        /* remove trailing ) if present */
-        if(arg_len && arg_buffer[arg_len-1] == ')'){ arg_buffer[arg_len-1] = '\0'; }
+
+static void args_end() {
+    if (capturing_args && current_func_sym) {
+        if (arg_len && arg_buffer[arg_len - 1] == ')') {
+            arg_buffer[arg_len - 1] = '\0';
+        }
         char* s = xstrdup(arg_buffer);
         trim(s);
         sym_append_params(current_func_sym, s);
         free(s);
     }
-    capturing_args = 0; paren_depth = 0; arg_len = 0; current_func_sym = NULL;
+    capturing_args = 0;
+    paren_depth = 0;
+    arg_len = 0;
+    current_func_sym = NULL;
 }
 
 /* ---------------- Token printing ---------------- */
-static void print_token(const char* kind, const char* lexeme){
+
+static void print_token(const char* kind, const char* lexeme) {
     printf("[line %d] %-12s : %s\n", yylineno, kind, lexeme);
 }
 
-/* ---------------- Helper to classify numbers ---------------- */
-static const char* classify_int(const char* s){
-    if(!s) return "int";
-    if(strlen(s) > 2 && s[0]=='0' && (s[1]=='x'||s[1]=='X')) return "hex";
-    if(strlen(s) > 2 && s[0]=='0' && (s[1]=='b'||s[1]=='B')) return "bin";
-    if(s[0]=='0' && strlen(s)>1) return "oct";
+/* ---------------- classify numbers ---------------- */
+
+static const char* classify_int(const char* s) {
+    if (!s) return "int";
+    if (strlen(s) > 2 && s[0] == '0' && (s[1] == 'x' || s[1] == 'X')) return "hex";
+    if (strlen(s) > 2 && s[0] == '0' && (s[1] == 'b' || s[1] == 'B')) return "bin";
+    if (s[0] == '0' && strlen(s) > 1) return "oct";
     return "int";
 }
 
-/* Track whitespace/newline inside states manually when needed */
-#define YY_USER_ACTION /* placeholder */
-
-#line 978 "lex.yy.c"
+#line 1031 "lex.yy.c"
 /* --------------- Definitions ------------------ */
 
-#line 981 "lex.yy.c"
+#line 1034 "lex.yy.c"
 
 #define INITIAL 0
 #define COMMENT 1
@@ -1202,10 +1255,10 @@ YY_DECL
 		}
 
 	{
-#line 242 "scanner.l"
+#line 293 "scanner.l"
 
 
-#line 1209 "lex.yy.c"
+#line 1262 "lex.yy.c"
 
 	while ( /*CONSTCOND*/1 )		/* loops until end-of-file is reached */
 		{
@@ -1276,29 +1329,31 @@ do_action:	/* This label is used only to access EOF actions. */
 case 1:
 /* rule 1 can match eol */
 YY_RULE_SETUP
-#line 244 "scanner.l"
+#line 295 "scanner.l"
 {
     print_token("PREPROC", yytext);
-    /* If it's a #define NAME value, record in constant table */
     char* tmp = xstrdup(yytext);
     char* p = tmp;
-    /* strip leading spaces and '#' */
-    while(*p==' '||*p=='\t') p++;
-    if(*p=='#'){ p++; }
-    while(*p==' ') p++;
-    if(strncmp(p,"define",6)==0 && isspace((unsigned char)p[6])){
-        p+=6; while(*p==' ') p++;
-        /* NAME */
-        char namebuf[256]={0};
-        int i=0;
-        while(*p && (isalnum((unsigned char)*p) || *p=='_')){
-            if(i<255) namebuf[i++]=*p;
+
+    while (*p == ' ' || *p == '\t') p++;
+    if (*p == '#') p++;
+    while (*p == ' ') p++;
+
+    if (strncmp(p, "define", 6) == 0 && isspace((unsigned char)p[6])) {
+        p += 6;
+        while (*p == ' ') p++;
+
+        char namebuf[256] = {0};
+        int i = 0;
+        while (*p && (isalnum((unsigned char)*p) || *p == '_')) {
+            if (i < 255) namebuf[i++] = *p;
             p++;
         }
-        namebuf[i]='\0';
-        while(*p==' '||*p=='\t') p++;
+        namebuf[i] = '\0';
+        while (*p == ' ' || *p == '\t') p++;
+
         char* val = trim(p);
-        if(val && namebuf[0]){
+        if (val && namebuf[0]) {
             const_add(namebuf, yylineno, val, "macro");
         }
     }
@@ -1307,100 +1362,128 @@ YY_RULE_SETUP
 	YY_BREAK
 case 2:
 YY_RULE_SETUP
-#line 272 "scanner.l"
+#line 325 "scanner.l"
 { /* ignore */ }
 	YY_BREAK
 case 3:
 /* rule 3 can match eol */
 YY_RULE_SETUP
-#line 273 "scanner.l"
-{ /* newline handled by %option yylineno */ }
+#line 326 "scanner.l"
+{ /*ignore*/ }
 	YY_BREAK
 case 4:
 YY_RULE_SETUP
-#line 275 "scanner.l"
+#line 328 "scanner.l"
 { /* ignore */ }
 	YY_BREAK
 case 5:
 YY_RULE_SETUP
-#line 277 "scanner.l"
-{ BEGIN(COMMENT); int depth=1; int c1,c2;
-             while(depth>0){
-                c1 = input();
-                if(c1==EOF){ fprintf(stderr,"[line %d] ERROR: Unterminated comment\n", yylineno); BEGIN(INITIAL); break; }
-                if(c1=='\n'){ /* yylineno auto increments via flex */ }
-                if(c1=='/'){
-                    c2 = input();
-                    if(c2=='*'){ depth++; }
-                    else if(c2!=EOF){ unput(c2); }
-                } else if(c1=='*'){
-                    c2 = input();
-                    if(c2=='/'){ depth--; }
-                    else if(c2!=EOF){ unput(c2); }
-                }
-             }
-             BEGIN(INITIAL);
-           }
+#line 330 "scanner.l"
+{
+    BEGIN(COMMENT);
+    int depth = 1;
+    int c1, c2;
+    while (depth > 0) {
+        c1 = input();
+        if (c1 == EOF) {
+            fprintf(stderr, "[line %d] ERROR: Unterminated comment\n", yylineno);
+            BEGIN(INITIAL);
+            break;
+        }
+        if (c1 == '\n') {
+        }
+        if (c1 == '/') {
+            c2 = input();
+            if (c2 == '*') {
+                depth++;
+            } else if (c2 != EOF) {
+                unput(c2);
+            }
+        } else if (c1 == '*') {
+            c2 = input();
+            if (c2 == '/') {
+                depth--;
+            } else if (c2 != EOF) {
+                unput(c2);
+            }
+        }
+    }
+    BEGIN(INITIAL);
+}
 	YY_BREAK
 case 6:
 YY_RULE_SETUP
-#line 295 "scanner.l"
-{ BEGIN(STRING); yyless(0); }
+#line 362 "scanner.l"
+{
+    BEGIN(STRING);
+    yyless(0);
+}
 	YY_BREAK
 case 7:
 YY_RULE_SETUP
-#line 296 "scanner.l"
+#line 366 "scanner.l"
 {
-             print_token("STRING", yytext);
-             const_add("-", yylineno, yytext, "string");
-             BEGIN(INITIAL);
-           }
+    print_token("STRING", yytext);
+    const_add("-", yylineno, yytext, "string");
+    BEGIN(INITIAL);
+}
 	YY_BREAK
 case 8:
 /* rule 8 can match eol */
 YY_RULE_SETUP
-#line 301 "scanner.l"
-{ /* continued line inside string - treat as part of string */ }
+#line 371 "scanner.l"
+{
+    /* continued line inside string - treat as part of string */
+}
 	YY_BREAK
 case 9:
 /* rule 9 can match eol */
 YY_RULE_SETUP
-#line 302 "scanner.l"
-{ fprintf(stderr,"[line %d] ERROR: Unterminated string literal\n", yylineno-1); BEGIN(INITIAL); }
+#line 374 "scanner.l"
+{
+    fprintf(stderr, "[line %d] ERROR: Unterminated string literal\n", yylineno - 1);
+    BEGIN(INITIAL);
+}
 	YY_BREAK
 case 10:
 YY_RULE_SETUP
-#line 303 "scanner.l"
+#line 378 "scanner.l"
 { /* consume */ }
 	YY_BREAK
 case 11:
 YY_RULE_SETUP
-#line 305 "scanner.l"
-{ BEGIN(CHARLIT); yyless(0); }
+#line 381 "scanner.l"
+{
+    BEGIN(CHARLIT);
+    yyless(0);
+}
 	YY_BREAK
 case 12:
 YY_RULE_SETUP
-#line 306 "scanner.l"
+#line 385 "scanner.l"
 {
-             print_token("CHAR", yytext);
-             const_add("-", yylineno, yytext, "char");
-             BEGIN(INITIAL);
-           }
+    print_token("CHAR", yytext);
+    const_add("-", yylineno, yytext, "char");
+    BEGIN(INITIAL);
+}
 	YY_BREAK
 case 13:
 /* rule 13 can match eol */
 YY_RULE_SETUP
-#line 311 "scanner.l"
-{ fprintf(stderr,"[line %d] ERROR: Unterminated char literal\n", yylineno-1); BEGIN(INITIAL); }
+#line 390 "scanner.l"
+{
+    fprintf(stderr, "[line %d] ERROR: Unterminated char literal\n", yylineno - 1);
+    BEGIN(INITIAL);
+}
 	YY_BREAK
 case 14:
 YY_RULE_SETUP
-#line 312 "scanner.l"
+#line 394 "scanner.l"
 { /* consume */ }
 	YY_BREAK
 case 15:
 YY_RULE_SETUP
-#line 314 "scanner.l"
+#line 396 "scanner.l"
 {
     print_token("KEYWORD", yytext);
     last_was_ident = 0;
@@ -1408,216 +1491,252 @@ YY_RULE_SETUP
 	YY_BREAK
 case 16:
 YY_RULE_SETUP
-#line 319 "scanner.l"
+#line 401 "scanner.l"
 {
     print_token("TYPE", yytext);
-    if(!in_declaration) start_declaration(yytext);
-    else add_type_token(yytext);
+    if (!in_declaration) {
+        start_declaration(yytext);
+    } else {
+        add_type_token(yytext);
+    }
     last_was_ident = 0;
 }
 	YY_BREAK
 case 17:
 YY_RULE_SETUP
-#line 326 "scanner.l"
+#line 411 "scanner.l"
 {
     print_token("IDENT", yytext);
     Symbol* s = sym_touch(yytext);
-    strncpy(last_ident, yytext, sizeof(last_ident)-1);
-    last_ident[sizeof(last_ident)-1]='\0';
+    strncpy(last_ident, yytext, sizeof(last_ident) - 1);
+    last_ident[sizeof(last_ident) - 1] = '\0';
     last_was_ident = 1;
     array_capture_for_ident = 1;
-    if(in_declaration){
-        if(!s->type) sym_set_type(s, last_type);
+    if (in_declaration) {
+        if (!s->type) {
+            sym_set_type(s, last_type);
+        }
     }
 }
 	YY_BREAK
 case 18:
 YY_RULE_SETUP
-#line 338 "scanner.l"
-{ print_token("NUMBER", yytext); const_add("-", yylineno, yytext, "hex"); last_was_ident = 0; }
+#line 425 "scanner.l"
+{ print_token("NUMBER", yytext); const_add("-", yylineno, yytext, "hex");   last_was_ident = 0; }
 	YY_BREAK
 case 19:
 YY_RULE_SETUP
-#line 339 "scanner.l"
-{ print_token("NUMBER", yytext); const_add("-", yylineno, yytext, "bin"); last_was_ident = 0; }
+#line 426 "scanner.l"
+{ print_token("NUMBER", yytext); const_add("-", yylineno, yytext, "bin");   last_was_ident = 0; }
 	YY_BREAK
 case 20:
 YY_RULE_SETUP
-#line 340 "scanner.l"
+#line 427 "scanner.l"
 { print_token("NUMBER", yytext); const_add("-", yylineno, yytext, "float"); last_was_ident = 0; }
 	YY_BREAK
 case 21:
 YY_RULE_SETUP
-#line 341 "scanner.l"
+#line 428 "scanner.l"
 { print_token("NUMBER", yytext); const_add("-", yylineno, yytext, "float"); last_was_ident = 0; }
 	YY_BREAK
 case 22:
 YY_RULE_SETUP
-#line 342 "scanner.l"
+#line 429 "scanner.l"
 { print_token("NUMBER", yytext); const_add("-", yylineno, yytext, "float"); last_was_ident = 0; }
 	YY_BREAK
 case 23:
 YY_RULE_SETUP
-#line 343 "scanner.l"
+#line 430 "scanner.l"
 { print_token("NUMBER", yytext); const_add("-", yylineno, yytext, "float"); last_was_ident = 0; }
 	YY_BREAK
 case 24:
 YY_RULE_SETUP
-#line 344 "scanner.l"
-{ print_token("NUMBER", yytext); const_add("-", yylineno, yytext, "oct"); last_was_ident = 0; }
+#line 431 "scanner.l"
+{ print_token("NUMBER", yytext); const_add("-", yylineno, yytext, "oct");   last_was_ident = 0; }
 	YY_BREAK
 case 25:
 YY_RULE_SETUP
-#line 345 "scanner.l"
+#line 432 "scanner.l"
 { print_token("NUMBER", yytext); const_add("-", yylineno, yytext, classify_int(yytext)); last_was_ident = 0; }
 	YY_BREAK
 case 26:
 YY_RULE_SETUP
-#line 347 "scanner.l"
+#line 434 "scanner.l"
 {
-            print_token("PUNCT", yytext);
-            if(last_was_ident){
-                Symbol* s = sym_lookup(last_ident);
-                if(!s) s = sym_touch(last_ident);
-                if(in_declaration){
-                    s->is_function = 1;
-                    if(last_type[0]) sym_set_return(s, last_type);
-                }
-                args_begin(s);
-                BEGIN(FUNCARGS);
+    print_token("PUNCT", yytext);
+    if (last_was_ident) {
+        Symbol* s = sym_lookup(last_ident);
+        if (!s) {
+            s = sym_touch(last_ident);
+        }
+        if (in_declaration) {
+            s->is_function = 1;
+            if (last_type[0]) {
+                sym_set_return(s, last_type);
             }
-            last_was_ident = 0;
-         }
+        }
+        args_begin(s);
+        BEGIN(FUNCARGS);
+    }
+    last_was_ident = 0;
+}
 	YY_BREAK
 case 27:
 YY_RULE_SETUP
-#line 361 "scanner.l"
-{ /* collect raw text inside args */ for(size_t i=0;i<yyleng;i++) args_push_char(yytext[i]); }
+#line 452 "scanner.l"
+{
+    /* collect raw text inside args */
+    for (size_t i = 0; i < yyleng; i++) {
+        args_push_char(yytext[i]);
+    }
+}
 	YY_BREAK
 case 28:
 YY_RULE_SETUP
-#line 362 "scanner.l"
+#line 458 "scanner.l"
 { args_push_char('('); paren_depth++; }
 	YY_BREAK
 case 29:
 YY_RULE_SETUP
-#line 363 "scanner.l"
-{ args_push_char(')'); paren_depth--; if(paren_depth==0){ args_end(); BEGIN(INITIAL);} }
+#line 459 "scanner.l"
+{
+    args_push_char(')');
+    paren_depth--;
+    if (paren_depth == 0) {
+        args_end();
+        BEGIN(INITIAL);
+    }
+}
 	YY_BREAK
 case 30:
 /* rule 30 can match eol */
 YY_RULE_SETUP
-#line 364 "scanner.l"
+#line 467 "scanner.l"
 { args_push_char('\n'); }
 	YY_BREAK
 case 31:
 YY_RULE_SETUP
-#line 366 "scanner.l"
+#line 469 "scanner.l"
 { print_token("PUNCT", yytext); last_was_ident = 0; }
 	YY_BREAK
 case 32:
 YY_RULE_SETUP
-#line 367 "scanner.l"
+#line 471 "scanner.l"
 {
-            print_token("PUNCT", yytext);
-            if(array_capture_for_ident){
-                Symbol* s = sym_lookup(last_ident);
-                if(s) sym_append_dims(s, yytext);
-            }
-            last_was_ident = 0;
-         }
+    print_token("PUNCT", yytext);
+    if (array_capture_for_ident) {
+        Symbol* s = sym_lookup(last_ident);
+        if (s) {
+            sym_append_dims(s, yytext);
+        }
+    }
+    last_was_ident = 0;
+}
 	YY_BREAK
 case 33:
 YY_RULE_SETUP
-#line 375 "scanner.l"
+#line 481 "scanner.l"
 { print_token("PUNCT", yytext); last_was_ident = 0; }
 	YY_BREAK
 case 34:
 YY_RULE_SETUP
-#line 377 "scanner.l"
-{ print_token("PUNCT", yytext); array_capture_for_ident = 0; if(in_declaration) end_declaration(); last_was_ident = 0; }
+#line 483 "scanner.l"
+{
+    print_token("PUNCT", yytext);
+    array_capture_for_ident = 0;
+    if (in_declaration) {
+        end_declaration();
+    }
+    last_was_ident = 0;
+}
 	YY_BREAK
 case 35:
 YY_RULE_SETUP
-#line 378 "scanner.l"
+#line 491 "scanner.l"
 { print_token("PUNCT", yytext); last_was_ident = 0; }
 	YY_BREAK
 case 36:
 YY_RULE_SETUP
-#line 379 "scanner.l"
-{ print_token("PUNCT", yytext); if(in_declaration) end_declaration(); last_was_ident = 0; }
+#line 492 "scanner.l"
+{
+    print_token("PUNCT", yytext);
+    if (in_declaration) {
+        end_declaration();
+    }
+    last_was_ident = 0;
+}
 	YY_BREAK
 case 37:
 YY_RULE_SETUP
-#line 380 "scanner.l"
+#line 499 "scanner.l"
 { print_token("PUNCT", yytext); last_was_ident = 0; }
 	YY_BREAK
 case 38:
 YY_RULE_SETUP
-#line 381 "scanner.l"
+#line 501 "scanner.l"
 { print_token("OP", yytext); last_was_ident = 0; }
 	YY_BREAK
 case 39:
 YY_RULE_SETUP
-#line 383 "scanner.l"
+#line 502 "scanner.l"
 { print_token("OP", yytext); last_was_ident = 0; }
 	YY_BREAK
 case 40:
 YY_RULE_SETUP
-#line 384 "scanner.l"
+#line 503 "scanner.l"
 { print_token("OP", yytext); last_was_ident = 0; }
 	YY_BREAK
 case 41:
 YY_RULE_SETUP
-#line 385 "scanner.l"
+#line 504 "scanner.l"
 { print_token("OP", yytext); last_was_ident = 0; }
 	YY_BREAK
 case 42:
 YY_RULE_SETUP
-#line 386 "scanner.l"
+#line 505 "scanner.l"
 { print_token("OP", yytext); last_was_ident = 0; }
 	YY_BREAK
 case 43:
 YY_RULE_SETUP
-#line 387 "scanner.l"
+#line 506 "scanner.l"
 { print_token("OP", yytext); last_was_ident = 0; }
 	YY_BREAK
 case 44:
 YY_RULE_SETUP
-#line 388 "scanner.l"
+#line 507 "scanner.l"
 { print_token("OP", yytext); last_was_ident = 0; }
 	YY_BREAK
 case 45:
 YY_RULE_SETUP
-#line 389 "scanner.l"
+#line 508 "scanner.l"
 { print_token("OP", yytext); last_was_ident = 0; }
 	YY_BREAK
 case 46:
 YY_RULE_SETUP
-#line 390 "scanner.l"
+#line 509 "scanner.l"
 { print_token("OP", yytext); last_was_ident = 0; }
 	YY_BREAK
 case 47:
 YY_RULE_SETUP
-#line 391 "scanner.l"
+#line 510 "scanner.l"
 { print_token("OP", yytext); last_was_ident = 0; }
 	YY_BREAK
 case 48:
 YY_RULE_SETUP
-#line 392 "scanner.l"
+#line 511 "scanner.l"
 { print_token("OP", yytext); last_was_ident = 0; }
 	YY_BREAK
 case 49:
 YY_RULE_SETUP
-#line 393 "scanner.l"
+#line 512 "scanner.l"
 { print_token("OP", yytext); last_was_ident = 0; }
 	YY_BREAK
 case 50:
 YY_RULE_SETUP
-#line 395 "scanner.l"
+#line 514 "scanner.l"
 {
-            fprintf(stderr, "[line %d] ERROR: Invalid token '%s'\n", yylineno, yytext);
-          }
+    fprintf(stderr, "[line %d] ERROR: Invalid token '%s'\n", yylineno, yytext);
+}
 	YY_BREAK
 case YY_STATE_EOF(INITIAL):
 case YY_STATE_EOF(COMMENT):
@@ -1625,42 +1744,41 @@ case YY_STATE_EOF(STRING):
 case YY_STATE_EOF(CHARLIT):
 case YY_STATE_EOF(PP):
 case YY_STATE_EOF(FUNCARGS):
-#line 399 "scanner.l"
+#line 518 "scanner.l"
 {
-            /* print tables */
-            printf("\n==== SYMBOL TABLE ====\n");
-            printf("%-20s %-15s %-12s %-10s %-15s %s\n", "Name", "Type", "Dimensions", "Frequency", "Return Type", "Parameters Lists in Function call");
-            for(int i=0;i<SYM_HASH_SIZE;i++){
-                for(Symbol* s=symtab[i]; s; s=s->next){
-                    printf("%-20s %-15s %-12s %-10d %-15s %s\n",
-                        s->name,
-                        s->type ? s->type : "-",
-                        s->dimensions ? s->dimensions : "-",
-                        s->frequency,
-                        s->return_type ? s->return_type : (s->is_function ? "unknown" : "-"),
-                        s->param_lists ? s->param_lists : "-"
-                    );
-                }
-            }
-            printf("\n==== CONSTANT TABLE ====\n");
-            printf("%-20s %-10s %-30s %s\n", "Variable Name", "Line No.", "Value", "Type");
-            for(size_t i=0;i<nconsts;i++){
-                printf("%-20s %-10d %-30s %s\n",
-                    consts[i].var_name ? consts[i].var_name : "-",
-                    consts[i].line,
-                    consts[i].value ? consts[i].value : "",
-                    consts[i].type ? consts[i].type : ""
-                );
-            }
-            return 0;
-          }
+    printf("\n==== SYMBOL TABLE ====\n");
+    printf("%-20s %-15s %-12s %-10s %-15s %s\n", "Name", "Type", "Dimensions", "Frequency", "Return Type", "Parameters Lists in Function call");
+    for (int i = 0; i < SYM_HASH_SIZE; i++) {
+        for (Symbol* s = symtab[i]; s; s = s->next) {
+            printf("%-20s %-15s %-12s %-10d %-15s %s\n",
+                   s->name,
+                   s->type ? s->type : "-",
+                   s->dimensions ? s->dimensions : "-",
+                   s->frequency,
+                   s->return_type ? s->return_type : (s->is_function ? "unknown" : "-"),
+                   s->param_lists ? s->param_lists : "-"
+                  );
+        }
+    }
+    printf("\n==== CONSTANT TABLE ====\n");
+    printf("%-20s %-10s %-30s %s\n", "Variable Name", "Line No.", "Value", "Type");
+    for (size_t i = 0; i < nconsts; i++) {
+        printf("%-20s %-10d %-30s %s\n",
+               consts[i].var_name ? consts[i].var_name : "-",
+               consts[i].line,
+               consts[i].value ? consts[i].value : "",
+               consts[i].type ? consts[i].type : ""
+              );
+    }
+    return 0;
+}
 	YY_BREAK
 case 51:
 YY_RULE_SETUP
-#line 428 "scanner.l"
+#line 546 "scanner.l"
 ECHO;
 	YY_BREAK
-#line 1664 "lex.yy.c"
+#line 1782 "lex.yy.c"
 
 	case YY_END_OF_BUFFER:
 		{
@@ -2677,16 +2795,18 @@ void yyfree (void * ptr )
 
 #define YYTABLES_NAME "yytables"
 
-#line 428 "scanner.l"
+#line 546 "scanner.l"
 
 
-int main(int argc, char** argv){
-    if(argc > 1){
+int main(int argc, char** argv) {
+    if (argc > 1) {
         FILE* f = fopen(argv[1], "r");
-        if(!f){ perror("fopen"); return 1; }
+        if (!f) {
+            perror("fopen");
+            return 1;
+        }
         yyin = f;
     }
     yylex();
     return 0;
 }
-
