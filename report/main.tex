@@ -7,6 +7,7 @@
 \usepackage{amsmath}
 \usepackage{tabularx}
 \usepackage{longtable}
+\usepackage{booktabs}    % nicer tables
 \usepackage[hidelinks]{hyperref}
 \usepackage{tikz}
 \usepackage{float}
@@ -22,7 +23,6 @@
 \definecolor{codepurple}{rgb}{0.58,0,0.82}
 \definecolor{backcolour}{rgb}{0.95,0.95,0.92}
 
-
 \lstdefinestyle{flex}{
     backgroundcolor=\color{backcolour},   
     commentstyle=\color{codegreen},
@@ -35,7 +35,6 @@
     frame=single,
     language=C
 }
-
 
 \title{\textbf{A Report on\\Compiler Design Lab (CS304): Mini Project\\Phase 1}}
 \author{
@@ -108,7 +107,6 @@ int x = 10;
 
 \vspace{2cm}
 
-
 \section{DFA Diagram}
 
 \begin{figure}[H]
@@ -122,9 +120,6 @@ int x = 10;
     \includegraphics[width=1\textwidth]{IDKEY.png}
     \caption{Identifier vs Keywords}
 \end{figure}
-
-
-
 
 The behavior of the DFA upon entering the \texttt{INITIAL STATE} can be summarized as follows:
 
@@ -186,10 +181,12 @@ In addition to specific cases for literals and comments, the scanner has general
     \item \textbf{Invalid Tokens:} A catch-all rule, \texttt{.}, matches any single character that does not conform to any of the other defined rules. This triggers an "Invalid token" error message, which includes the offending character(s).
     \item \textbf{File Handling Errors:} In the \texttt{main} function, if a source file is provided as a command-line argument but cannot be opened, the \texttt{fopen} call will fail. This condition is checked, and the system error is reported via \texttt{perror} before the program exits with a status of 1.
 \end{itemize}
+
 \vspace{5cm}
 
 \section{Results}
 
+% ===================== TEST CASE 1 =====================
 \subsection*{Test Case 1}
 \textbf{Input:}
 \begin{lstlisting}[style=flex]
@@ -216,6 +213,63 @@ unsigned long fact(int n)
     \includegraphics[width=0.9\linewidth]{functions.png}
 \end{figure}
 
+% ---- Symbol Table for Test Case 1 ----
+\noindent\textbf{Symbol Table (Test Case 1)}
+\begin{center}
+\begin{longtable}{@{} l l l r r r @{}}\toprule
+\textbf{Identifier} & \textbf{Type (if known)} & \textbf{Scope} &
+\textbf{First Line} & \textbf{Last Line} & \textbf{Freq} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Identifier} & \textbf{Type (if known)} & \textbf{Scope} &
+\textbf{First Line} & \textbf{Last Line} & \textbf{Freq} \\
+\midrule
+\endhead
+\midrule \multicolumn{6}{r}{\emph{(continued on next page)}}\\
+\midrule
+\endfoot
+\bottomrule
+\endlastfoot
+main          & int (function)            & global   & 5  & 10 & 1 \\
+add           & int (function)            & global   & 3  & 3  & 1 \\
+fact          & unsigned long (function)  & global   & 2  & 16 & 1 \\
+arr           & int[10][20]               & global   & 4  & 4  & 1 \\
+r             & int                       & local    & 7  & 9  & 2 \\
+x             & int (param)               & local    & 3  & 3  & 1 \\
+y             & int (param)               & local    & 3  & 3  & 1 \\
+n             & int (param)               & local    & 11 & 15 & 3 \\
+printf        & identifier (extern)       & extern   & 8  & 8  & 1 \\
+\end{longtable}
+\end{center}
+
+% ---- Constant Table for Test Case 1 ----
+\noindent\textbf{Constant Table (Test Case 1)}
+\begin{center}
+\begin{longtable}{@{} l l l l r @{}}\toprule
+\textbf{Kind} & \textbf{Lexeme/Value} & \textbf{Datatype} & \textbf{Base} & \textbf{Line} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Kind} & \textbf{Lexeme/Value} & \textbf{Datatype} & \textbf{Base} & \textbf{Line} \\
+\midrule
+\endhead
+\midrule \multicolumn{5}{r}{\emph{(continued on next page)}}\\
+\midrule
+\endfoot
+\bottomrule
+\endlastfoot
+integer       & 10           & int     & dec & 4  \\
+integer       & 20           & int     & dec & 4  \\
+integer       & 3            & int     & dec & 7  \\
+integer       & 5            & int     & dec & 7  \\
+string        & \%d\textbackslash n & char[]  & N/A & 8  \\
+integer       & 0            & int     & dec & 9  \\
+integer       & 1            & int     & dec & 14 \\
+\end{longtable}
+\end{center}
+
+% ===================== TEST CASE 2 =====================
 \subsection*{Test Case 2}
 \textbf{Input:}
 \begin{lstlisting}[style=flex]
@@ -236,6 +290,54 @@ int main()
     \centering
     \includegraphics[width=0.9\linewidth]{errors.png}
 \end{figure}
+
+% ---- Symbol Table for Test Case 2 ----
+\noindent\textbf{Symbol Table (Test Case 2)}
+\begin{center}
+\begin{longtable}{@{} l l l r r r @{}}\toprule
+\textbf{Identifier} & \textbf{Type (if known)} & \textbf{Scope} &
+\textbf{First Line} & \textbf{Last Line} & \textbf{Freq} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Identifier} & \textbf{Type (if known)} & \textbf{Scope} &
+\textbf{First Line} & \textbf{Last Line} & \textbf{Freq} \\
+\midrule
+\endhead
+\midrule \multicolumn{6}{r}{\emph{(continued on next page)}}\\
+\midrule
+\endfoot
+\bottomrule
+\endlastfoot
+main          & int (function)  & global       & 2 & 10 & 1 \\
+a             & int             & local(main)  & 4 & 4  & 1 \\
+c             & char            & local(main)  & 5 & 5  & 1 \\
+% `$invalid' is intentionally omitted as it's an invalid identifier (lexer error)
+\end{longtable}
+\end{center}
+
+% ---- Constant Table for Test Case 2 ----
+\noindent\textbf{Constant Table (Test Case 2)}
+\begin{center}
+\begin{longtable}{@{} l l l l r @{}}\toprule
+\textbf{Kind} & \textbf{Lexeme/Value} & \textbf{Datatype} & \textbf{Base} & \textbf{Line} \\
+\midrule
+\endfirsthead
+\toprule
+\textbf{Kind} & \textbf{Lexeme/Value} & \textbf{Datatype} & \textbf{Base} & \textbf{Line} \\
+\midrule
+\endhead
+\midrule \multicolumn{5}{r}{\emph{(continued on next page)}}\\
+\midrule
+\endfoot
+\bottomrule
+\endlastfoot
+integer       & 09            & int     & oct? / dec form & 4 \\
+integer       & 5             & int     & dec             & 6 \\
+% The unterminated string and comment do not yield valid constants.
+\end{longtable}
+\end{center}
+
 \vspace{0.5cm}
 
 \section{Conclusion}
