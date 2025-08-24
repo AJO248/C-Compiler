@@ -422,14 +422,24 @@ ESC         (\\[abfnrtv\\'"?]|\\x[0-9A-Fa-f]+|\\[0-7]{1,3})
     }
 }
 
-{HEX}{INTSUFFIX}?   { print_token("NUMBER", yytext); const_add("-", yylineno, yytext, "hex");   last_was_ident = 0; }
-{BIN}{INTSUFFIX}?   { print_token("NUMBER", yytext); const_add("-", yylineno, yytext, "bin");   last_was_ident = 0; }
-{FLOAT1}{FLOATSUF}? { print_token("NUMBER", yytext); const_add("-", yylineno, yytext, "float"); last_was_ident = 0; }
-{FLOAT2}{FLOATSUF}? { print_token("NUMBER", yytext); const_add("-", yylineno, yytext, "float"); last_was_ident = 0; }
-{FLOAT3}{FLOATSUF}? { print_token("NUMBER", yytext); const_add("-", yylineno, yytext, "float"); last_was_ident = 0; }
-{FLOAT4}{FLOATSUF}? { print_token("NUMBER", yytext); const_add("-", yylineno, yytext, "float"); last_was_ident = 0; }
-{OCT}{INTSUFFIX}?   { print_token("NUMBER", yytext); const_add("-", yylineno, yytext, "oct");   last_was_ident = 0; }
-{DIGIT}+{INTSUFFIX}? { print_token("NUMBER", yytext); const_add("-", yylineno, yytext, classify_int(yytext)); last_was_ident = 0; }
+{DIGIT}+([.][0-9]+)+([.][0-9]+)*   {
+    fprintf(stderr, "[line %d] ERROR: Invalid float literal '%s'\n", yylineno, yytext);
+    last_was_ident = 0;
+}
+
+{DIGIT}+{LETTER}+([A-Za-z0-9_.])*   {
+    fprintf(stderr, "[line %d] ERROR: Invalid number '%s'\n", yylineno, yytext);
+    last_was_ident = 0;
+}
+
+{FLOAT1}{FLOATSUF}?/[^.0-9A-Za-z_]   { print_token("NUMBER", yytext); const_add("-", yylineno, yytext, "float"); last_was_ident = 0; }
+{FLOAT2}{FLOATSUF}?/[^.0-9A-Za-z_]   { print_token("NUMBER", yytext); const_add("-", yylineno, yytext, "float"); last_was_ident = 0; }
+{FLOAT3}{FLOATSUF}?/[^.0-9A-Za-z_]   { print_token("NUMBER", yytext); const_add("-", yylineno, yytext, "float"); last_was_ident = 0; }
+{FLOAT4}{FLOATSUF}?/[^.0-9A-Za-z_]   { print_token("NUMBER", yytext); const_add("-", yylineno, yytext, "float"); last_was_ident = 0; }
+{HEX}{INTSUFFIX}?/[^.0-9A-Za-z_]   { print_token("NUMBER", yytext); const_add("-", yylineno, yytext, "hex");   last_was_ident = 0; }
+{BIN}{INTSUFFIX}?/[^.0-9A-Za-z_]   { print_token("NUMBER", yytext); const_add("-", yylineno, yytext, "bin");   last_was_ident = 0; }
+{OCT}{INTSUFFIX}?/[^.0-9A-Za-z_]   { print_token("NUMBER", yytext); const_add("-", yylineno, yytext, "oct");   last_was_ident = 0; }
+{DIGIT}+{INTSUFFIX}?/[^.0-9A-Za-z_]   { print_token("NUMBER", yytext); const_add("-", yylineno, yytext, classify_int(yytext)); last_was_ident = 0; }
 
 "("         {
     print_token("PUNCT", yytext);
